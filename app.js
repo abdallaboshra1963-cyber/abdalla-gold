@@ -1,168 +1,223 @@
+(function(){
+'use strict';
 
-const $=id=>document.getElementById(id),fmt=n=>Number(n||0).toLocaleString('ar-EG',{maximumFractionDigits:2});
-const safeJSON=(key,fallback)=>{try{const raw=localStorage.getItem(key);return raw?JSON.parse(raw):fallback}catch(_){try{localStorage.removeItem(key)}catch(__){};return fallback}};
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n||0).toLocaleString('ar-EG',{maximumFractionDigits:2});
+const safeJSON=(key,fallback)=>{try{const raw=localStorage.getItem(key);return raw?JSON.parse(raw):fallback}catch(_){return fallback}};
 const setJSON=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));return true}catch(_){return false}};
-let prices=safeJSON('bushra_live_prices_v123',{24:0,21:0,18:0,buy24:0,buy21:0,buy18:0}),path=[];
+const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const on=(id,event,handler)=>{const el=$(id);if(el)el.addEventListener(event,handler)};
+const withTimeout=(promise,ms=7000)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),ms))]);
+
+let prices=safeJSON('bushra_live_prices_v14',{24:0,21:0,18:0,buy24:0,buy21:0,buy18:0});
 let products=safeJSON('bushra_products_v6',null)||[
-{id:1,company:'Egypt Gold',type:'غوايش',style:'غويشة مخصوص',name:'يونكة',code:'EG-B-001',karat:21,weight:5.25,making:0,img:'assets/shop.jpg'},
-{id:2,company:'Egypt Gold',type:'غوايش',style:'غويشة مخصوص',name:'دب',code:'EG-B-002',karat:21,weight:6.10,making:0,img:'assets/shop.jpg'},
-{id:3,company:'Egypt Gold',type:'غوايش',style:'غويشة مخصوص',name:'عصفورة',code:'EG-B-003',karat:21,weight:4.80,making:0,img:'assets/shop.jpg'},
-{id:4,company:'Egypt Gold',type:'غوايش',style:'غويشة مخصوص',name:'زيجاج',code:'EG-B-004',karat:21,weight:7.20,making:0,img:'assets/shop.jpg'},
-{id:5,company:'Egypt Gold',type:'خواتم',style:'خواتم يومية',name:'خاتم كلاسيك',code:'EG-R-001',karat:18,weight:3.20,making:0,img:'assets/shop.jpg'}];
-let bullionOffers=safeJSON('bushra_bullion_v6',[]),reports=safeJSON('bushra_reports_v6',[]);
-function saveAll(){setJSON('bushra_products_v6',products);setJSON('bushra_bullion_v6',bullionOffers);setJSON('bushra_reports_v6',reports)}
-function toast(t){const x=$('toast');x.textContent=t;x.style.display='block';clearTimeout(window.__toast);window.__toast=setTimeout(()=>x.style.display='none',3000)}
-function openMenu(){$('side').classList.add('open')}function closeMenu(){$('side').classList.remove('open')}function toggleGroup(btn){btn.parentElement.classList.toggle('open')}
-function showSection(id){if(id==='home'){window.scrollTo({top:0,behavior:'smooth'});return}const x=$(id);if(x)x.scrollIntoView({behavior:'smooth',block:'start'})}
-function scrollToId(id){closeMenu();if(id==='prices'){document.getElementById('prices')?.scrollIntoView({behavior:'smooth',block:'start'});return}showSection(id)}
-function openCatalog(type){path=[];showSection('bullionCatalog');renderCatalog(type);closeMenu()}
-function imgFor(type){return 'assets/shop.jpg'}
-function renderCatalog(filterType=''){
- const companies=[...new Set(products.map(p=>p.company))];let items=products;
- if(filterType)items=items.filter(p=>p.type===filterType);
- const catalog=$('catalog'),grid=$('productGrid');grid.innerHTML='';$('crumbs').innerHTML=filterType?`<button class="crumb active" onclick="renderCatalog()">${filterType}</button>`:'';
- if(!filterType){catalog.innerHTML=companies.map(c=>`<div class="tile" onclick="renderCompany('${escapeHtml(c)}')"><div class="tileImg" style="background-image:url('${imgFor('')}')"></div><h3>${c}</h3><small>${products.filter(p=>p.company===c).length} منتج</small></div>`).join('')||'<div class="empty">أضف المنتجات من لوحة الإدارة</div>';return}
- catalog.innerHTML=[...new Set(items.map(p=>p.style))].map(s=>`<div class="tile" onclick="renderStyle('${escapeHtml(filterType)}','${escapeHtml(s)}')"><div class="tileImg" style="background-image:url('${imgFor(filterType)}')"></div><h3>${s}</h3><small>${items.filter(p=>p.style===s).length} موديل</small></div>`).join('');
-}
-function renderCompany(c){const items=products.filter(p=>p.company===c);$('crumbs').innerHTML=`<button class="crumb" onclick="renderCatalog()">الشركات</button><button class="crumb active">${c}</button>`;$('catalog').innerHTML=[...new Set(items.map(p=>p.type))].map(t=>`<div class="tile" onclick="renderType('${escapeHtml(c)}','${escapeHtml(t)}')"><div class="tileImg" style="background-image:url('${imgFor(t)}')"></div><h3>${t}</h3><small>${items.filter(p=>p.type===t).length} منتج</small></div>`).join('');$('productGrid').innerHTML=''}
-function renderType(c,t){const items=products.filter(p=>p.company===c&&p.type===t);$('crumbs').innerHTML=`<button class="crumb" onclick="renderCompany('${escapeHtml(c)}')">${c}</button><button class="crumb active">${t}</button>`;$('catalog').innerHTML=[...new Set(items.map(p=>p.style))].map(s=>`<div class="tile" onclick="renderStyle('${escapeHtml(t)}','${escapeHtml(s)}','${escapeHtml(c)}')"><div class="tileImg" style="background-image:url('${imgFor(t)}')"></div><h3>${s}</h3><small>${items.filter(p=>p.style===s).length} موديل</small></div>`).join('');$('productGrid').innerHTML=''}
-function renderStyle(t,s,c=''){const items=products.filter(p=>(!c||p.company===c)&&p.type===t&&p.style===s);$('crumbs').innerHTML=`<button class="crumb" onclick="renderType('${escapeHtml(c||items[0]?.company||'')}','${escapeHtml(t)}')">${t}</button><button class="crumb active">${s}</button>`;$('catalog').innerHTML='';$('productGrid').innerHTML=items.map(productCard).join('')||'<div class="empty">لا توجد منتجات في هذه المجموعة.</div>'}
-function productCard(p){const sell=(prices[p.karat]||0)*p.weight+(Number(p.making)||0),saved=safeJSON('bushra_saved',[]).includes(p.id);return `<article class="product"><div class="productImg" style="background-image:url('${p.img||'assets/shop.jpg'}')"></div><div class="productBody"><span class="pill">${p.company}</span><h3>${p.name}</h3><div class="meta"><div>الوزن<br><b>${fmt(p.weight)} جم</b></div><div>العيار<br><b>${p.karat}</b></div><div>الكود<br><b>${p.code||'—'}</b></div><div>السعر الحالي<br><b>${sell?fmt(sell)+' ج.م':'يتحدث الآن'}</b></div></div><div class="productBtns"><button class="buyBtn" onclick="openPurchase(${p.id})">شراء الآن</button><button class="reserveBtn" onclick="reserveProduct(${p.id})">حجز 24 ساعة</button><button class="saveBtn" onclick="saveProduct(${p.id})">${saved?'★ محفوظ':'☆ حفظ'}</button></div></div></article>`}
-function saveProduct(id){let a=safeJSON('bushra_saved',[]);a=a.includes(id)?a.filter(x=>x!==id):[...a,id];localStorage.setItem('bushra_saved',JSON.stringify(a));toast(a.includes(id)?'تم حفظ المنتج':'تمت إزالة المنتج من المحفوظات');renderStyle(products.find(p=>p.id===id).type,products.find(p=>p.id===id).style,products.find(p=>p.id===id).company)}
-function reserveProduct(id){if(!requireCustomer('للحجز 24 ساعة لازم يكون عندك حساب موثق في الموقع.'))return;const p=products.find(x=>x.id===id),r={id:'R-'+Date.now(),productId:id,code:p.code,name:p.name,expires:Date.now()+86400000};const u=getCustomer();orders.unshift({id:r.id,type:'حجز',status:'pending_review',createdAt:new Date().toISOString(),customerRef:u.id,customerName:u.name,phone:u.phone,customerEmail:u.email,productId:p.id,productCode:p.code,productName:p.name,company:p.company,productType:p.type,style:p.style,karat:p.karat,weight:p.weight,pricePerGram:prices[p.karat]||0,total:(prices[p.karat]||0)*p.weight+(Number(p.making)||0)});saveOrders();const msg=encodeURIComponent(`طلب حجز 24 ساعة\nكود المنتج: ${p.code}\nالمنتج: ${p.name}\nالوزن: ${p.weight} جم\nالعيار: ${p.karat}\nرقم الحجز: ${r.id}\nالعميل: ${u.name}`);const wa=localStorage.getItem('bushra_whats')||'';toast('تم إرسال طلب الحجز للمراجعة — لا يتم تثبيته قبل موافقة المحل');if(wa)window.open('https://wa.me/'+wa+'?text='+msg,'_blank');renderMyOrders()}
-function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
-function renderBullion(){const el=$('bullionOffers');el.innerHTML=bullionOffers.filter(x=>x.status!=='closed').map(x=>`<div class="tile"><div class="tileImg" style="background-image:url('${x.image||'assets/shop.jpg'}')"></div><h3>${escapeHtml(x.alias)}</h3><small>${x.weight} جم • عيار ${x.karat}</small><p class="small">كود العرض: <b>${x.code}</b></p><button class="btn primary" onclick="document.getElementById('bullionRequestCode').value='${x.code}';toast('تم اختيار العرض ${x.code}')">أطلب العرض</button></div>`).join('')||'<div class="empty">لا توجد عروض منشورة حاليًا.</div>'}
-function requestBullion(){const code=$('bullionRequestCode').value.trim(),weight=$('bullionRequestWeight').value,phone=$('bullionRequestPhone').value.trim();if(!code||!phone)return toast('اكتب رقم العرض ووسيلة التواصل');const msg=encodeURIComponent(`طلب سبيكة عبر الوسيط\nكود العرض: ${code}\nالوزن المطلوب: ${weight||'حسب العرض'} جم\nالتواصل: ${phone}`);const wa=localStorage.getItem('bushra_whats')||'';if(wa)window.open('https://wa.me/'+wa+'?text='+msg,'_blank');toast('تم تسجيل طلبك لدى الوسيط')}
-function sellFromVault(){if(!requireCustomer('بيع الذهب من المحفظة متاح فقط لصاحب الحساب.'))return;const w=prompt('كم جرام تريد بيعها؟','1');if(!w)return;const have=Number(localStorage.getItem('bushra_customer_vault_weight')||0);if(Number(w)<=0||Number(w)>have)return toast('الكمية أكبر من رصيدك الحالي');toast('تم تجهيز طلب بيع '+w+' جم بسعر الشراء الحالي — بانتظار مراجعة الإدارة')}
-function getCustomer(){return safeJSON('bushra_customer',null)}
-function requireCustomer(message){if(getCustomer())return true;toast(message||'سجّل حسابك أولًا لإتمام العملية');openAccount();return false}
-function openAccount(){const u=getCustomer();$('accountModal').classList.add('open');$('accountForm').style.display=u?'none':'block';$('accountLogged').classList.toggle('hidden',!u);$('accountTitle').textContent=u?'👤 حسابي':'👤 إنشاء حساب';if(u){$('accountNameView').textContent=u.name;$('accountEmailView').textContent=u.email;$('accountPhoneView').textContent=u.phone;renderMyOrders()}}
-function closeAccount(){$('accountModal').classList.remove('open')}
-function demoLogin(){const u={id:'DEMO-'+Date.now().toString(36).toUpperCase(),name:'عميل تجريبي',phone:'01000000000',email:'demo@bushra.local',createdAt:new Date().toISOString()};setJSON('bushra_customer',u);toast('تم الدخول بحساب تجريبي للمعاينة');openAccount();renderVault()}
-on('accountForm','submit',async e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.target).entries());const u={id:'CUS-'+Date.now().toString(36).toUpperCase(),name:fd.name.trim(),phone:fd.phone.trim(),email:fd.email.trim().toLowerCase(),createdAt:new Date().toISOString()};setJSON('bushra_customer',u);localStorage.setItem('bushra_customer_vault_weight','0');localStorage.setItem('bushra_customer_vault_cost','0');try{await fetch('/api/customers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(u)})}catch(_){}toast('تم إنشاء الحساب — سنرسل تأكيد البريد عند تفعيل البريد الإنتاجي');e.target.reset();openAccount();renderVault()})
-function logoutCustomer(){localStorage.removeItem('bushra_customer');closeAccount();renderVault();toast('تم تسجيل الخروج')}
-function renderMyOrders(){const u=getCustomer(),el=$('myOrders');if(!u||!el)return;const mine=orders.filter(o=>o.customerRef===u.id);el.innerHTML='<h3>طلباتي</h3>'+(mine.map(o=>`<div class="row"><span><b>${escapeHtml(o.id)}</b><br><small>${escapeHtml(o.type||'طلب')} • ${escapeHtml(o.productName||'')}</small></span><span class="status">${escapeHtml(o.status||'pending')}</span></div>`).join('')||'<div class="empty">لا توجد طلبات حتى الآن.</div>')}
-async function loadPrices(manual=false){
- const status=$('liveStatus'),top=$('topLive'),updated=$('priceUpdated');
- try{
-  if(status)status.textContent='🟡 جاري تحديث الأسعار...';
-  let r,d;
-  try{
-   r=await withTimeout(fetch('/api/gold?ts='+Date.now(),{cache:'no-store'}),7000);
-   d=await withTimeout(r.json(),7000);
-   if(!r.ok)throw new Error(d.error||'server_gold_failed');
-  }catch(_){
-   d=await fetchDirectFormula();
-  }
-  const next={24:Number(d.prices['24'].sell),21:Number(d.prices['21'].sell),18:Number(d.prices['18'].sell),buy24:Number(d.prices['24'].buy),buy21:Number(d.prices['21'].buy),buy18:Number(d.prices['18'].buy)};
-  if(!Object.values(next).every(Number.isFinite)||!next[21])throw new Error('invalid_price_payload');
-  prices=next;setJSON('bushra_live_prices_v123',prices);
-  [['sell24',prices[24]],['buy24',prices.buy24],['sell21',prices[21]],['buy21',prices.buy21],['sell18',prices[18]],['qBuy21',prices.buy21],['qSell21',prices[21]],['sellGoldRate',prices.buy21]].forEach(([id,v])=>{const el=$(id);if(el)el.textContent=fmt(v)+' ج.م'});
-  if(status)status.textContent='🟢 سعر مباشر'; if(top)top.textContent='🟢 مباشر';
-  if(updated)updated.textContent='آخر تحديث '+new Date(d.updatedAt||Date.now()).toLocaleTimeString('ar-EG',{hour12:false,timeZone:'Africa/Cairo'});
-  renderCatalog();renderBullionCatalog();
-  if(manual)toast('تم تحديث الأسعار');
- }catch(e){
-  const cached=safeJSON('bushra_live_prices_v123',null);
-  if(cached&&cached[21]){prices=cached;[['sell24',prices[24]],['buy24',prices.buy24],['sell21',prices[21]],['buy21',prices.buy21],['sell18',prices[18]],['qBuy21',prices.buy21],['qSell21',prices[21]],['sellGoldRate',prices.buy21]].forEach(([id,v])=>{const el=$(id);if(el)el.textContent=fmt(v)+' ج.م'});if(status)status.textContent='🟠 آخر سعر محفوظ';if(top)top.textContent='🟠 محفوظ';if(updated)updated.textContent='آخر سعر محفوظ مؤقتًا';renderCatalog();renderBullionCatalog();if(manual)toast('تعذر المصدر المباشر؛ تم عرض آخر سعر محفوظ')}
-  else{if(status)status.textContent='🔴 تعذر تحديث السعر';if(top)top.textContent='تعذر التحديث';if(updated)updated.textContent='لم يتوفر سعر بعد'}
- }
-}
-async function loadWorld(){try{const r=await withTimeout(fetch('/api/world?ts='+Date.now(),{cache:'no-store'}),7000);if(!r.ok)throw new Error('world_http_'+r.status);const d=await withTimeout(r.json(),7000);$('worldGold').textContent=d.price?'$'+Number(d.price).toLocaleString('en-US',{maximumFractionDigits:2})+'/oz':'غير متاح';$('worldSilver').textContent=d.silver?'$'+Number(d.silver).toLocaleString('en-US',{maximumFractionDigits:2})+'/oz':'غير متاح';$('worldChange').textContent=(d.changePct!==undefined&&d.changePct!==null)?((Number(d.changePct)>=0?'+':'')+Number(d.changePct).toFixed(2)+'%'):'غير متاح';$('worldDxy').textContent=d.dxy?Number(d.dxy).toFixed(2):'غير متاح';$('worldUpdated').textContent='آخر تحديث: '+new Date(d.updatedAt||Date.now()).toLocaleString('ar-EG');$('worldSource').textContent='المصدر: '+(d.source||'مصدر البيانات')}catch(e){$('worldGold').textContent=$('worldSilver').textContent=$('worldChange').textContent=$('worldDxy').textContent='غير متاح';$('worldSource').textContent='تعذر تحديث المصدر الآن'}}
-function updateClock(){const t=new Intl.DateTimeFormat('ar-EG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:'Africa/Cairo'}).format(new Date());const el=$('clock');if(el)el.textContent='القاهرة '+t}
-function on(id,event,handler){const el=$(id);if(el)el.addEventListener(event,handler)}
-function withTimeout(promise,ms=7000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),ms))])}
-async function fetchDirectFormula(){
- const gold=await withTimeout(fetch('https://api.gold-api.com/price/XAU',{cache:'no-store'}),7000);
- const gd=await gold.json();
- const usdPerOz=Number(gd.price??gd.value??gd.amount);
- if(!Number.isFinite(usdPerOz)||usdPerOz<=0)throw new Error('bad_gold_source');
- let fx;
- try{fx=await withTimeout(fetch('https://api.frankfurter.dev/v2/rate/USD/EGP?providers=CBE',{cache:'no-store'}),7000)}catch(_){fx=await withTimeout(fetch('https://api.frankfurter.dev/v2/rate/USD/EGP',{cache:'no-store'}),7000)}
- const fd=await fx.json();const usdEgp=Number(fd.rate);
- if(!Number.isFinite(usdEgp)||usdEgp<=0)throw new Error('bad_fx_source');
- const base21=usdPerOz*usdEgp/35.55,base24=base21*24/21,base18=base21*18/21;
- const spread=20;
- return {prices:{24:{sell:base24+spread/2,buy:Math.max(0,base24-spread/2)},21:{sell:base21+spread/2,buy:Math.max(0,base21-spread/2)},18:{sell:base18+spread/2,buy:Math.max(0,base18-spread/2)}},updatedAt:gd.updatedAt||new Date().toISOString(),source:'مصدر مباشر احتياطي'};
-}
+ {id:1,company:'Egypt Gold',type:'غوايش',style:'غويشة مخصوص',name:'يونكة',code:'EG-B-001',karat:21,weight:5.25,making:0,stock:4,img:'assets/product-placeholder.svg'},
+ {id:2,company:'Egypt Gold',type:'غوايش',style:'غويشة مخصوص',name:'دب',code:'EG-B-002',karat:21,weight:6.10,making:0,stock:2,img:'assets/product-placeholder.svg'},
+ {id:3,company:'Egypt Gold',type:'غوايش',style:'غويشة مخصوص',name:'عصفورة',code:'EG-B-003',karat:21,weight:4.80,making:0,stock:1,img:'assets/product-placeholder.svg'},
+ {id:4,company:'Egypt Gold',type:'غوايش',style:'غويشة مخصوص',name:'زيجاج',code:'EG-B-004',karat:21,weight:7.20,making:0,stock:3,img:'assets/product-placeholder.svg'},
+ {id:5,company:'Egypt Gold',type:'خواتم',style:'خواتم يومية',name:'خاتم كلاسيك',code:'EG-R-001',karat:18,weight:3.20,making:0,stock:2,img:'assets/product-placeholder.svg'}
+];
+let orders=safeJSON('bushra_orders_v14',safeJSON('bushra_orders_v8',[]));
+let cart=safeJSON('bushra_cart_v14',[]);
+let sellListings=safeJSON('bushra_sell_listings_v14',null)||[
+ {id:'SELL-1001',alias:'بائع رقم 21',company:'Egypt Gold',type:'خاتم',karat:21,weight:4.8,condition:'بحالة جيدة',location:'القاهرة',description:'خاتم ذهب 21 بحالة جيدة.',status:'approved',img:'assets/product-placeholder.svg'},
+ {id:'SELL-1002',alias:'بائع رقم 34',company:'لازردي',type:'غويشة',karat:18,weight:7.2,condition:'مستعمل',location:'الجيزة',description:'غويشة 18، صور ومعلومات كاملة.',status:'approved',img:'assets/product-placeholder.svg'},
+ {id:'SELL-1003',alias:'بائع رقم 07',company:'BTC',type:'سبيكة',karat:24,weight:10,condition:'جديد',location:'القاهرة',description:'سبيكة استثمارية 10 جرام.',status:'approved',img:'assets/product-placeholder.svg'}
+];
+let sellSubmissions=safeJSON('bushra_sell_submissions_v14',[]);
+let bullionOffers=safeJSON('bushra_bullion_v6',[]);
+let reports=safeJSON('bushra_reports_v6',[]);
+let priceHistory=safeJSON('bushra_price_history_v14',[]);
+let priceAlerts=safeJSON('bushra_price_alerts_v14',[]);
+let comparisons=safeJSON('bushra_compare_v14',[]);
+let specialRequests=safeJSON('bushra_special_requests_v14',[]);
+let notifications=safeJSON('bushra_notifications_v14',[]);
+let selectedBullionCompany='BTC',selectedBullionWeight=10,selectedCoinCompany='BTC';
+let priceLock={kind:'',items:null,total:0,expiresAt:0,timer:null};
 
-on('sellImages','change',e=>previewFiles(e.target.files,'sellPreview'));function previewFiles(files,id){const p=$(id);p.innerHTML='';[...files].slice(0,12).forEach(f=>{const r=new FileReader();r.onload=()=>p.insertAdjacentHTML('beforeend',`<img src="${r.result}">`);r.readAsDataURL(f)})}
-on('sellForm','submit',async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());d.alias='بائع رقم '+String(Math.floor(Math.random()*90)+10);try{const r=await fetch('/api/offers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(d)});if(!r.ok)throw 0;toast('تم إرسال العرض للمراجعة');e.target.reset()}catch(e){toast('تم تجهيز العرض محليًا للمراجعة؛ اربطه بالخادم عند التشغيل')}})
-on('bullionForm','submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());d.code=d.code||'B-'+String(Date.now()).slice(-6);d.status='pending';d.createdAt=new Date().toISOString();bullionOffers.unshift(d);saveAll();renderBullion();e.target.reset();toast('تم حفظ عرض السبيكة للمراجعة')});
-on('lostForm','submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());d.id='L-'+String(Date.now()).slice(-6);d.status='pending';d.createdAt=new Date().toISOString();reports.unshift(d);saveAll();renderReports();e.target.reset();toast('تم إرسال البلاغ للمراجعة قبل النشر')});
-function renderReports(){const publicList=reports.filter(x=>x.status==='published');$('lostList').innerHTML=publicList.map(x=>`<div class="row"><div><b>${x.id}</b><br><span class="small">${escapeHtml(x.description)}</span></div><span class="status">بلاغ منشور</span></div>`).join('')||'<div class="empty">لا توجد بلاغات منشورة.</div>'}
-async function openAdmin(){ $('admin').classList.add('open'); $('adminLogin').classList.add('hidden'); $('adminBody').classList.add('hidden'); try{const r=await fetch('/api/admin/data',{cache:'no-store'}); if(r.ok){$('adminBody').classList.remove('hidden');renderAdmin();syncAdminData();}else{$('adminLogin').classList.remove('hidden');$('adminPass').focus();}}catch(e){$('adminLogin').classList.remove('hidden');$('adminPass').focus();} } function closeAdmin(){$('admin').classList.remove('open')}async function logoutAdmin(){try{await fetch('/api/admin/logout',{method:'POST'});}catch(e){}$('adminLogin').classList.remove('hidden');$('adminBody').classList.add('hidden');toast('تم تسجيل الخروج')}
-
-async function syncAdminData(){try{const r=await fetch('/api/admin/data',{cache:'no-store'});if(!r.ok)return;const d=await r.json();if(Array.isArray(d.customers)){window.adminCustomers=d.customers||[];renderAdminCustomers()} if(Array.isArray(d.orders)&&d.orders.length){orders=d.orders.map(o=>({id:o.order_code||('ORD-'+o.id),type:o.order_type,status:o.status,createdAt:o.created_at,customerRef:o.customer_ref,customerName:o.customer_name,phone:o.phone,delivery:o.delivery,notes:o.notes,productId:o.product_id,productCode:o.product_code,productName:o.product_name,company:o.company,productType:o.product_type,style:o.style,karat:o.karat,weight:o.weight,pricePerGram:o.price_per_gram,total:o.total_amount}));saveOrders();renderAdminOrders()}}catch(e){}}
-async function loginAdmin(){const password=$('adminPass').value;try{const r=await fetch('/api/admin/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password})});if(!r.ok)throw 0;$('adminLogin').classList.add('hidden');$('adminBody').classList.remove('hidden');renderAdmin();syncAdminData();toast('تم الدخول للوحة الإدارة')}catch(e){toast('كلمة المرور غير صحيحة')}}
-function adminTab(id){document.querySelectorAll('.adminSec').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');if(id==='aOrders')renderAdminOrders();if(id==='aCustomers')renderAdminCustomers();if(id==='aOffers')renderAdminBullion();if(id==='aReports')renderAdminReports()}
-on('apImgs','change',e=>previewFiles(e.target.files,'apPreview'));
-function addAdminProduct(){const files=[...$('apImgs').files];const p={id:Date.now(),company:$('apCompany').value.trim(),type:$('apType').value.trim(),style:$('apStyle').value.trim(),name:$('apName').value.trim(),code:$('apCode').value.trim()||'P-'+Date.now(),karat:Number($('apK').value),weight:Number($('apW').value),making:Number($('apM').value||0),img:'assets/shop.jpg',images:[]};if(!p.name||!p.weight)return toast('أدخل اسم المنتج والوزن');if(files.length){let done=0;files.forEach(f=>{const r=new FileReader();r.onload=()=>{p.images.push(r.result);done++;if(done===files.length){p.img=p.images[0];products.unshift(p);saveAll();renderAdmin();renderCatalog();$('apPreview').innerHTML='';$('apImgs').value='';toast('تمت إضافة المنتج والصور')}};r.readAsDataURL(f)})}else{products.unshift(p);saveAll();renderAdmin();renderCatalog();toast('تمت إضافة المنتج')}}
-function renderAdmin(){renderAdminOrders();renderAdminCustomers();renderAdminProducts();renderAdminBullion();renderAdminReports()}
-window.adminCustomers=[];function renderAdminCustomers(){const el=$('adminCustomers');if(!el)return;const a=window.adminCustomers||[];el.innerHTML=a.map(c=>`<div class="adminRow"><div><b>${escapeHtml(c.name)}</b><div class="small">${escapeHtml(c.email)} • ${escapeHtml(c.phone)}</div><div class="small">${c.created_at?new Date(c.created_at).toLocaleString('ar-EG'):''}</div></div><span class="status">${escapeHtml(c.status||'pending_verification')}</span></div>`).join('')||'<div class="empty">لا توجد حسابات محفوظة في قاعدة البيانات بعد.</div>'}
-function renderAdminProducts(){$('adminProducts').innerHTML=products.map(p=>`<div class="adminRow"><div><b>${escapeHtml(p.name)}</b><div class="small">${escapeHtml(p.company)} • ${escapeHtml(p.type)} • ${escapeHtml(p.style)} • ${p.weight} جم • ${p.code}</div></div><button class="btn light danger" onclick="deleteProduct(${p.id})">حذف</button></div>`).join('')}
-function deleteProduct(id){products=products.filter(p=>p.id!==id);saveAll();renderAdminProducts();renderCatalog();toast('تم حذف المنتج')}
-function renderAdminBullion(){$('adminBullion').innerHTML=bullionOffers.map((x,i)=>`<div class="adminRow"><div><b>${x.alias}</b><div class="small">${x.code} • ${x.weight} جم • ${x.status}</div></div><div><button class="btn light" onclick="publishBullion(${i})">نشر</button><button class="btn light danger" onclick="bullionOffers.splice(${i},1);saveAll();renderAdminBullion();renderBullion()">حذف</button></div></div>`).join('')||'<div class="empty">لا توجد عروض.</div>'}
-function publishBullion(i){bullionOffers[i].status='published';saveAll();renderAdminBullion();renderBullion();toast('تم نشر عرض السبيكة بدون إظهار سعرها')}
-function renderAdminReports(){$('adminReports').innerHTML=reports.map((x,i)=>`<div class="adminRow"><div><b>${x.id}</b><div class="small">${escapeHtml(x.description)} • ${x.phone}</div></div><div><button class="btn light" onclick="publishReport(${i})">نشر</button><button class="btn light danger" onclick="reports.splice(${i},1);saveAll();renderAdminReports();renderReports()">حذف</button></div></div>`).join('')||'<div class="empty">لا توجد بلاغات.</div>'}
-function publishReport(i){reports[i].status='published';saveAll();renderAdminReports();renderReports();toast('تم نشر البلاغ')}
-function saveAdminSettings(){localStorage.setItem('bushra_whats',$('setWhats').value.trim());localStorage.setItem('bushra_shop',$('setShop').value.trim());localStorage.setItem('bushra_making',$('setMaking').value);toast('تم حفظ إعدادات العرض')}
-function importCSV(){const f=$('csvFile').files[0];if(!f)return toast('اختر ملف CSV');const r=new FileReader();r.onload=()=>{const lines=r.result.split(/\r?\n/).filter(Boolean),head=lines.shift().split(',').map(x=>x.trim());let count=0;for(const line of lines){const v=line.split(',');const o={};head.forEach((h,i)=>o[h]=v[i]?.trim()||'');if(!o.name)continue;products.unshift({id:Date.now()+count,company:o.company||'Egypt Gold',type:o.type||'مجوهرات',style:o.style||'عام',name:o.name,code:o.code||('P-'+Date.now()+count),karat:Number(o.karat||21),weight:Number(o.weight||0),making:Number(o.making||0),img:o.image||'assets/shop.jpg'});count++}saveAll();renderAdmin();renderCatalog();toast('تم استيراد '+count+' منتج')};r.readAsText(f)}
-let orders=safeJSON('bushra_orders_v8',[]);
-function saveOrders(){setJSON('bushra_orders_v8',orders)}
-function openPurchase(id){if(!requireCustomer('للشراء لازم تنشئ حسابًا حتى لا يمكن استخدام أرقام وهمية.'))return;const p=products.find(x=>x.id===id);if(!p)return;const sell=(prices[p.karat]||0)*p.weight+(Number(p.making)||0);$('purchaseProductId').value=id;$('purchaseSummary').innerHTML=`<div class="orderStat"><small>المنتج</small><b>${escapeHtml(p.name)}</b></div><div class="orderStat"><small>الشركة</small><b>${escapeHtml(p.company)}</b></div><div class="orderStat"><small>الوزن / العيار</small><b>${fmt(p.weight)} جم / ${p.karat}</b></div><div class="orderStat"><small>السعر الحالي</small><b>${sell?fmt(sell)+' ج.م':'يتحدث الآن'}</b></div>`;$('purchaseAccountBox').innerHTML=`👤 الحساب: <b>${escapeHtml(getCustomer()?.name||'')}</b> • ${escapeHtml(getCustomer()?.email||'')} • سيتم ربط الطلب بهذا الحساب`;$('purchaseModal').classList.add('open')}
-function closePurchase(){$('purchaseModal').classList.remove('open')}
-on('purchaseForm','submit',async e=>{e.preventDefault();const p=products.find(x=>x.id===Number($('purchaseProductId').value));if(!p)return;const fd=Object.fromEntries(new FormData(e.target).entries());const u=getCustomer();if(!u){closePurchase();return requireCustomer('سجّل حسابك أولًا.')}fd.customerName=u.name;fd.phone=u.phone;const amount=(prices[p.karat]||0)*p.weight+(Number(p.making)||0);const order={id:'ORD-'+Date.now().toString().slice(-8),type:'شراء',status:'pending_review',createdAt:new Date().toISOString(),customerRef:u.id,customerEmail:u.email,customerName:fd.customerName,phone:fd.phone,delivery:fd.delivery,notes:fd.notes,productId:p.id,productCode:p.code,productName:p.name,company:p.company,productType:p.type,style:p.style,karat:p.karat,weight:p.weight,pricePerGram:prices[p.karat]||0,total:amount};orders.unshift(order);saveOrders();try{const r=await fetch('/api/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(order)});if(!r.ok)throw 0}catch(_){}closePurchase();e.target.reset();toast('تم إرسال الطلب للمراجعة — رقم الطلب '+order.id);renderMyOrders();});
-function renderAdminOrders(){const el=$('adminOrders');if(!el)return;const sorted=[...orders].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));el.innerHTML=sorted.map(o=>`<div class="adminRow"><div><b>${o.id} • ${escapeHtml(o.type||'شراء')}</b><div class="small">${escapeHtml(o.customerName||o.customerRef||'عميل')} • ${escapeHtml(o.phone||'')} • ${escapeHtml(o.productName||'')} • ${o.weight||0} جم • ${fmt(o.total||0)} ج.م</div><div class="small">${new Date(o.createdAt).toLocaleString('ar-EG')}</div></div><div class="contactLinks"><span class="status">${escapeHtml(o.status==='pending_review'?'بانتظار المراجعة':(o.status==='completed'?'تمت المعالجة':(o.status||'جديد')))}</span>${o.phone?`<a class="btn light" href="https://wa.me/${String(o.phone).replace(/\D/g,'')}?text=${encodeURIComponent('بخصوص طلبك '+o.id+' لدى عبدالله بشرى')}" target="_blank" rel="noopener">واتساب</a>`:''}<button class="btn light" onclick="markOrderDone('${o.id}')">تمت المعالجة</button></div></div>`).join('')||'<div class="empty">لا توجد طلبات بعد.</div>';const badge=$('adminOrderBadge');if(badge){const n=orders.filter(o=>o.status==='new').length;badge.textContent=n;badge.style.display=n?'inline-flex':'none'}}
-async function markOrderDone(id){const o=orders.find(x=>x.id===id);if(!o)return;o.status='completed';saveOrders();try{await fetch('/api/admin/order-status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({orderCode:id,status:'completed'})})}catch(_){}renderAdminOrders();toast('تم تحديث حالة الطلب')}
-function refreshAdminOrders(){renderAdminOrders();toast('تم تحديث الطلبات')}
-function renderVault(){const u=getCustomer();const locked=!u;$('vaultLocked').style.display=locked?'block':'none';$('vaultIntro').textContent=locked?'المحفظة مرتبطة بحساب العميل، ولا يوجد رصيد قبل تسجيل الدخول وامتلاك ذهب محفوظ.':'محفظتك مرتبطة بحسابك وطلباتك، وأي زيادة في الرصيد يجب أن تنتج عن عملية معتمدة.';const weight=locked?0:Number(localStorage.getItem('bushra_customer_vault_weight')||0),cost=locked?0:Number(localStorage.getItem('bushra_customer_vault_cost')||0),value=weight*(prices.buy24||0);$('vaultWeight').textContent=fmt(weight)+' جم';$('vaultCost').textContent=fmt(cost)+' ج.م';$('vaultValue').textContent=fmt(value)+' ج.م';$('vaultPL').textContent=fmt(value-cost)+' ج.م'}
-function openPrivacy(){openArticle('الخصوصية والأمان',`<p>بيانات العميل والبائع لا تُعرض للطرف الآخر. بيانات التواصل الخاصة تظل للإدارة، والطلبات تسجل برقم عملية واضح.</p><h3>حماية الإدارة</h3><p>لوحة الإدارة غير موجودة في قائمة الموقع العامة. الدخول يعتمد على جلسة خادم، ومع التشغيل النهائي نضيف Passkey ببصمة أو Face ID بدل الاعتماد على كلمة المرور وحدها.</p><h3>مهم</h3><p>لا يوجد نظام إنترنت مضمون بنسبة 100%، لذلك نستخدم طبقات حماية متعددة بدل الاعتماد على إخفاء الرابط فقط.</p>`)}
-function openKnowledge(k){const data={karat:['اعرف عيار الذهب',`<p><b>24 قيراط:</b> أعلى نقاء شائع للذهب الاستثماري والسبائك.</p><p><b>21 قيراط:</b> من أشهر العيارات في المشغولات المصرية، ونسبة الذهب فيه أقل من 24.</p><p><b>18 قيراط:</b> يحتوي على نسبة ذهب أقل من 21، ويُستخدم كثيرًا في المشغولات.</p><p>كلما اختلف العيار اختلف سعر الجرام، لذلك نعرض السعر بحسب العيار بدل استخدام رقم واحد لكل المنتجات.</p>`],price:['كيف يُحسب السعر؟',`<p>في أبسط صورة: <b>قيمة الذهب = الوزن × سعر جرام العيار.</b></p><p>ثم قد تضاف المصنعية وأي إضافات أو رسوم مرتبطة بالمنتج.</p><p><b>مثال:</b> قطعة وزنها 5 جم عيار 21، وسعر جرام 21 هو 5,000 ج.م، فقيمة الذهب الخام 25,000 ج.م قبل المصنعية والإضافات.</p><p>في السبائك قد تكون المعادلة مختلفة بحسب المنتج والمصنعية والرسوم، ولذلك السعر النهائي يظهر على بطاقة المنتج.</p>`],saving:['ادخار الذهب',`<p>السبائك والجنيهات عادةً أوضح للعميل الذي يهتم بوزن الذهب نفسه، بينما المشغولات تجمع بين قيمة الذهب والتصميم والمصنعية.</p><p>قبل الشراء، قارن الوزن والعيار والمصنعية وسياسة إعادة الشراء.</p>`],verify:['تحقق من القطعة',`<p>إذا كانت القطعة مسجلة لدى المحل، يمكن استخدام كود المنتج أو QR للوصول إلى صفحة تحقق لا تكشف بيانات مالك القطعة.</p><p>وجود كود لا يعني وحده إثبات الملكية القانونية؛ التحقق يعتمد على سجل المحل والبيانات المرتبطة بالقطعة.</p>`]};const x=data[k]||data.price;openArticle(x[0],x[1])}
-function openArticle(title,body){$('articleTitle').textContent=title;$('articleBody').innerHTML=body;$('articleModal').classList.add('open')}function closeArticle(){$('articleModal').classList.remove('open')}
-function openVaultPurchase(){if(!requireCustomer('لشراء الذهب وربطه بالمحفظة لازم يكون عندك حساب.'))return;showSection('bullionCatalog');toast('اختار الشركة والوزن، وبعدها اضغط شراء السبيكة.')}
-function requestVaultDelivery(){if(!requireCustomer('لازم تسجل الدخول أولًا لطلب استلام الذهب.'))return;toast('تم فتح طلب الاستلام لحسابك — المراجعة تتم من الإدارة.')}
+const FILTER_COMPANIES=['Egypt Gold','لازردي','ملاكوش','سامي عطية','Master Gold','Andrea & George','BTC','MB','SAM','Gold Era','سليما جولد','Swiss Gold'];
 const bullionCompanies=['BTC','Gold Era','SAM','MB','سليما جولد','Swiss Gold'];
 const bullionWeights=[0.5,1,2.5,5,10,20,31.1,50,100,250,500,1000];
 const coinCompanies=['BTC','SAM','MB','سامي عطية'];
 const coinVariants={BTC:['جنيه BTC'],SAM:['جنيه SAM'],MB:['جنيه MB'],'سامي عطية':['جنيه سامي عطية']};
-let selectedBullionCompany='BTC', selectedBullionWeight=10, selectedCoinCompany='BTC';
-function renderBullionCatalog(company=selectedBullionCompany,weight=selectedBullionWeight){
- selectedBullionCompany=company; selectedBullionWeight=Number(weight);
- const companies=$('bullionCompanies'), weights=$('bullionWeights'), selected=$('bullionSelected'); if(!companies||!weights||!selected)return;
- companies.innerHTML=bullionCompanies.map(c=>`<button class="bullionCompany ${c===selectedBullionCompany?'active':''}" onclick="renderBullionCatalog('${escapeHtml(c)}',${selectedBullionWeight})">${escapeHtml(c)}</button>`).join('');
- weights.innerHTML=bullionWeights.map(w=>`<button class="weightBtn ${w===selectedBullionWeight?'active':''}" onclick="renderBullionCatalog('${escapeHtml(selectedBullionCompany)}',${w})">${fmt(w)} جم</button>`).join('');
- const price=(prices[24]||0)*selectedBullionWeight;
- const id=`bull-${selectedBullionCompany}-${selectedBullionWeight}`;
- selected.innerHTML=`<div class="bullionSelected"><div class="bullionPhoto"><span>${escapeHtml(selectedBullionCompany)}<br>${fmt(selectedBullionWeight)} جم</span></div><div class="bullionInfo"><span class="pill">${escapeHtml(selectedBullionCompany)}</span><h3>سبيكة ${escapeHtml(selectedBullionCompany)} — ${fmt(selectedBullionWeight)} جم</h3><div class="meta"><div>الوزن<br><b>${fmt(selectedBullionWeight)} جم</b></div><div>العيار<br><b>24</b></div><div>سعر البيع للعميل<br><b>${price?fmt(price)+' ج.م':'يتحدث الآن'}</b></div><div>الكود<br><b>${escapeHtml(id)}</b></div></div><div class="productBtns"><button class="saveBtn" onclick="toast('تم حفظ السبيكة في المفضلة')">🔖 حفظ</button><button class="reserveBtn" onclick="openBullionPurchase('${escapeHtml(id)}','سبيكة ${escapeHtml(selectedBullionCompany)} — ${fmt(selectedBullionWeight)} جم','${escapeHtml(selectedBullionCompany)}',${selectedBullionWeight},${price||0})">🛒 شراء السبيكة</button></div><div class="ownerHint">الصورة النهائية للسبيكة تُرفع من لوحة الإدارة لهذا الوزن؛ هنا نعرض معاينة مضغوطة فقط حتى لا نهدر مساحة الصفحة.</div></div></div>`;
- renderCoinCatalog();
+
+function saveCore(){
+ setJSON('bushra_products_v6',products);setJSON('bushra_orders_v14',orders);setJSON('bushra_cart_v14',cart);
+ setJSON('bushra_sell_listings_v14',sellListings);setJSON('bushra_sell_submissions_v14',sellSubmissions);
+ setJSON('bushra_bullion_v6',bullionOffers);setJSON('bushra_reports_v6',reports);
+ setJSON('bushra_price_history_v14',priceHistory);setJSON('bushra_price_alerts_v14',priceAlerts);
+ setJSON('bushra_compare_v14',comparisons);setJSON('bushra_special_requests_v14',specialRequests);
+ setJSON('bushra_notifications_v14',notifications);
 }
-function renderCoinCatalog(company=selectedCoinCompany){
- selectedCoinCompany=company; const companies=$('coinCompanies'), selected=$('coinSelected'); if(!companies||!selected)return;
- companies.innerHTML=coinCompanies.map(c=>`<button class="bullionCompany ${c===selectedCoinCompany?'active':''}" onclick="renderCoinCatalog('${escapeHtml(c)}')">${escapeHtml(c)}</button>`).join('');
- const name=coinVariants[selectedCoinCompany][0]; const price=(prices[21]||0)*8;
- selected.innerHTML=`<div class="bullionSelected"><div class="bullionPhoto"><span>${escapeHtml(selectedCoinCompany)}<br>جنيه ذهب</span></div><div class="bullionInfo"><span class="pill">${escapeHtml(selectedCoinCompany)}</span><h3>${escapeHtml(name)}</h3><div class="meta"><div>الوزن<br><b>8 جم</b></div><div>العيار<br><b>21</b></div><div>سعر البيع للعميل<br><b>${price?fmt(price)+' ج.م':'يتحدث الآن'}</b></div><div>الكود<br><b>COIN-${escapeHtml(selectedCoinCompany)}</b></div></div><div class="productBtns"><button class="saveBtn" onclick="toast('تم حفظ الجنيه في المفضلة')">🔖 حفظ</button><button class="reserveBtn" onclick="openBullionPurchase('coin-${escapeHtml(selectedCoinCompany)}','${escapeHtml(name)}','${escapeHtml(selectedCoinCompany)}',8,${price||0})">🛒 شراء الجنيه</button></div></div></div>`;
+function saveAll(){setJSON('bushra_products_v6',products);setJSON('bushra_bullion_v6',bullionOffers);setJSON('bushra_reports_v6',reports)}
+function saveOrders(){setJSON('bushra_orders_v14',orders)}
+
+function toast(t){const x=$('toast');if(!x)return;x.textContent=t;x.style.display='block';clearTimeout(window.__toast);window.__toast=setTimeout(()=>x.style.display='none',3200)}
+function openMenu(){$('side')?.classList.add('open')}
+function closeMenu(){$('side')?.classList.remove('open')}
+function toggleGroup(btn){btn?.parentElement?.classList.toggle('open')}
+function showSection(id){
+ if(id==='home'){closeMenu();window.scrollTo({top:0,behavior:'smooth'});return}
+ const x=$(id);if(!x)return null;
+ if(x.dataset.appSection!==undefined)x.classList.add('revealed');
+ if(id==='vault')renderVault();
+ if(id==='cart')renderCart();
+ if(id==='goldShop'){if(!shopState.hasSearched)renderShop({hasSearched:false});else renderShop(shopState)}
+ if(id==='sellMarket'&&!sellState.hasSearched)resetSellFilters();
+ if(id==='bullionCatalog'){renderBullionCatalog(selectedBullionCompany,selectedBullionWeight);renderCoinCatalog(selectedCoinCompany)}
+ if(id==='bullion')renderBullion();
+ if(id==='lost')renderReports();
+ requestAnimationFrame(()=>x.scrollIntoView({behavior:'smooth',block:'start'}));
+ return x;
 }
-function openBullionPurchase(id,name,company,weight,price){if(!requireCustomer('لشراء السبيكة لازم يكون عندك حساب.'))return;const p={id,name,company,weight,karat:24,code:id,price};$('purchaseProductId').value='';$('purchaseSummary').innerHTML=`<div class="orderStat"><small>المنتج</small><b>${escapeHtml(name)}</b></div><div class="orderStat"><small>الشركة</small><b>${escapeHtml(company)}</b></div><div class="orderStat"><small>الوزن / العيار</small><b>${fmt(weight)} جم / 24</b></div><div class="orderStat"><small>السعر وقت الطلب</small><b>${price?fmt(price)+' ج.م':'سيحدد عند التحقق'}</b></div>`;$('purchaseAccountBox').innerHTML=`👤 الحساب: <b>${escapeHtml(getCustomer()?.name||'')}</b> • ${escapeHtml(getCustomer()?.email||'')} • سيتم ربط الطلب بهذا الحساب`;$('purchaseModal').classList.add('open');$('purchaseForm').dataset.bullion=JSON.stringify(p)}
-const oldSubmit=$('purchaseForm').onsubmit;
-on('purchaseForm','submit',async e=>{const bp=e.target.dataset.bullion;if(!bp)return; e.preventDefault();const p=JSON.parse(bp),fd=Object.fromEntries(new FormData(e.target).entries()),u=getCustomer();if(!u){delete e.target.dataset.bullion;closePurchase();return requireCustomer('سجّل حسابك أولًا.')}fd.customerName=u.name;fd.phone=u.phone;const order={id:'ORD-'+Date.now().toString().slice(-8),type:'شراء سبيكة',status:'pending_review',createdAt:new Date().toISOString(),customerRef:u.id,customerEmail:u.email,customerName:fd.customerName,phone:fd.phone,delivery:fd.delivery,notes:fd.notes,productId:0,productCode:p.id,productName:p.name,company:p.company,productType:'سبائك',style:'ذهب استثماري',karat:24,weight:p.weight,pricePerGram:prices[24]||0,total:p.price||0};orders.unshift(order);saveOrders();try{await fetch('/api/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(order)})}catch(_){}delete e.target.dataset.bullion;closePurchase();e.target.reset();toast('تم إرسال طلب السبيكة للمراجعة — '+order.id);renderMyOrders()});
-function refreshAccountButton(){const u=getCustomer();const b=document.querySelector('.accountBtn');if(b)b.textContent=u?'👤 حسابي':'🔐 تسجيل / محفظتي'}
-// Hardening: expose core UI handlers explicitly and keep network work away from first paint.
-window.openMenu=openMenu; window.closeMenu=closeMenu; window.toggleGroup=toggleGroup; window.showSection=showSection; window.scrollToId=scrollToId; window.openAccount=openAccount; window.closeAccount=closeAccount; window.openPurchase=openPurchase; window.closePurchase=closePurchase;
-function checkSecretAdmin(){const q=new URLSearchParams(location.search);if(q.get('control')==='bushra-7f3c9b1e' || location.pathname==='/owner'){openAdmin();if(location.pathname==='/owner')history.replaceState({},'', '/');}}
-window.addEventListener('error',e=>{try{console.error('BUSHRA UI ERROR',e.error||e.message)}catch(_){}});
-checkSecretAdmin();
-// UI-first bootstrap: nothing here should prevent menu/account buttons from working.
-try{refreshAccountButton()}catch(_){}
-try{renderVault()}catch(_){}
-try{renderCatalog()}catch(_){}
-try{renderBullionCatalog()}catch(_){}
-try{renderBullion()}catch(_){}
-try{renderReports()}catch(_){}
-try{renderAdminOrders()}catch(_){}
-try{updateClock()}catch(_){}
-setInterval(()=>{try{updateClock()}catch(_){}},1000);
-setTimeout(()=>{try{loadPrices()}catch(e){console.error(e)}},150);
-setTimeout(()=>{try{loadWorld()}catch(e){console.error(e)}},300);
-setInterval(()=>{try{loadPrices()}catch(e){console.error(e)}},120000);
-setInterval(()=>{try{loadWorld()}catch(e){console.error(e)}},60000);
+function scrollToId(id){closeMenu();if(id==='prices'){document.getElementById('prices')?.scrollIntoView({behavior:'smooth',block:'start'});return}showSection(id)}
+function getCustomer(){return safeJSON('bushra_customer',null)}
+function requireCustomer(msg){if(getCustomer())return true;toast(msg||'سجّل حسابك أولًا لإتمام العملية');openAccount();return false}
+function refreshAccountButton(){const b=document.querySelector('.accountBtn');if(b)b.textContent=getCustomer()?'👤 حسابي':'🔐 تسجيل / محفظتي'}
+
+function getShopInventory(){return products.slice()}
+function priceForProduct(p){return (prices[p.karat]||0)*Number(p.weight||0)+Number(p.making||0)}
+
+/* ===== SHOP ===== */
+const SHOP_PAGE_SIZE=12;
+const shopState={type:'',company:'',karat:'',minWeight:'',maxWeight:'',minPrice:'',maxPrice:'',sort:'featured',page:1,hasSearched:false};
+
+function matchingProducts(filters={}){
+ let scoped=getShopInventory();
+ if(filters.type)scoped=scoped.filter(p=>String(p.type||'')===String(filters.type));
+ if(filters.karat)scoped=scoped.filter(p=>Number(p.karat)===Number(filters.karat));
+ if(filters.company)scoped=scoped.filter(p=>String(p.company||'')===String(filters.company));
+ return scoped;
+}
+function getAvailableShopCompanies(type='',karat=''){
+ const list=matchingProducts({type,karat}).map(p=>p.company).filter(Boolean);
+ return [...new Set([...FILTER_COMPANIES,...list])].sort((a,b)=>a.localeCompare(b,'ar'));
+}
+function refreshShopCompanyOptions(){
+ const el=$('shopCompany');if(!el)return;
+ const current=el.value||shopState.company||'';
+ const names=getAvailableShopCompanies($('shopType')?.value||shopState.type||'', $('shopKarat')?.value||shopState.karat||'');
+ el.innerHTML='<option value="">كل الشركات</option>'+names.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+ el.value=names.includes(current)?current:'';
+ if(current&&!names.includes(current))shopState.company='';
+}
+function getShopFilteredItems(){
+ let items=matchingProducts(shopState);
+ if(shopState.minWeight)items=items.filter(p=>Number(p.weight)>=Number(shopState.minWeight));
+ if(shopState.maxWeight)items=items.filter(p=>Number(p.weight)<=Number(shopState.maxWeight));
+ if(shopState.minPrice)items=items.filter(p=>priceForProduct(p)>=Number(shopState.minPrice));
+ if(shopState.maxPrice)items=items.filter(p=>priceForProduct(p)<=Number(shopState.maxPrice));
+ if(shopState.sort==='priceAsc')items.sort((a,b)=>priceForProduct(a)-priceForProduct(b));
+ else if(shopState.sort==='priceDesc')items.sort((a,b)=>priceForProduct(b)-priceForProduct(a));
+ else if(shopState.sort==='weightAsc')items.sort((a,b)=>Number(a.weight)-Number(b.weight));
+ else if(shopState.sort==='weightDesc')items.sort((a,b)=>Number(b.weight)-Number(a.weight));
+ return items;
+}
+function renderShop(filters={}){
+ Object.assign(shopState,filters);
+ if(!('hasSearched' in filters))shopState.hasSearched=Boolean(shopState.type||shopState.company||shopState.karat||shopState.minWeight||shopState.maxWeight||shopState.minPrice||shopState.maxPrice);
+ [['shopType',shopState.type],['shopCompany',shopState.company],['shopKarat',shopState.karat],['shopMinW',shopState.minWeight],['shopMaxW',shopState.maxWeight],['shopMinP',shopState.minPrice],['shopMaxP',shopState.maxPrice],['shopSort',shopState.sort]].forEach(([id,v])=>{const el=$(id);if(el)el.value=v||''});
+ refreshShopCompanyOptions();
+ const grid=$('shopGrid'),count=$('shopCount'),pager=$('shopPager'),hint=$('shopBrowseHint');
+ if(!shopState.hasSearched){
+   if(grid)grid.innerHTML='<div class="empty full shopBrowseEmpty"><b>ابدأ باختيار ما تبحث عنه</b><br>اختَر نوعًا أو شركة أو عيارًا أو نطاق وزن/سعر.</div>';
+   if(count)count.textContent='اختر الفلاتر أولًا';
+   if(hint)hint.textContent='بعد الاختيار سيظهر عدد صغير من النتائج.';
+   if(pager)pager.innerHTML='';
+   const chips=$('shopActiveFilters');if(chips)chips.innerHTML='';
+   refreshCompareBar();return;
+ }
+ const items=getShopFilteredItems();
+ const total=items.length,pages=Math.max(1,Math.ceil(total/SHOP_PAGE_SIZE));
+ shopState.page=Math.min(Math.max(1,Number(shopState.page||1)),pages);
+ const from=(shopState.page-1)*SHOP_PAGE_SIZE,visible=items.slice(from,from+SHOP_PAGE_SIZE);
+ if(grid)grid.innerHTML=visible.map(shopCard).join('')||'<div class="empty full">لا توجد منتجات مطابقة.</div>';
+ if(count)count.textContent=total?`عرض ${from+1}–${Math.min(from+visible.length,total)} من ${total} منتج`:'0 منتج مطابق';
+ if(hint)hint.textContent=total?`يتم تحميل ${visible.length} منتج فقط.`:'جرّب تغيير الفلاتر.';
+ if(pager)pager.innerHTML=pages>1?`<button class="pageBtn" onclick="changeShopPage(-1)" ${shopState.page<=1?'disabled':''}>السابق</button><span class="pageInfo">صفحة ${shopState.page} من ${pages}</span><button class="pageBtn" onclick="changeShopPage(1)" ${shopState.page>=pages?'disabled':''}>التالي</button>`:'';
+ const chips=$('shopActiveFilters');if(chips)chips.innerHTML=[shopState.type,shopState.company,shopState.karat?`عيار ${shopState.karat}`:'',shopState.minWeight?`من ${shopState.minWeight} جم`:'',shopState.maxWeight?`حتى ${shopState.maxWeight} جم`:'',shopState.minPrice?`من ${fmt(shopState.minPrice)} ج.م`:'',shopState.maxPrice?`حتى ${fmt(shopState.maxPrice)} ج.م`:''].filter(Boolean).map(x=>`<span class="filterChip">${escapeHtml(x)}</span>`).join('');
+ refreshCompareBar();
+}
+function applyShopFilters(){renderShop({type:$('shopType')?.value||'',company:$('shopCompany')?.value||'',karat:$('shopKarat')?.value||'',minWeight:$('shopMinW')?.value||'',maxWeight:$('shopMaxW')?.value||'',minPrice:$('shopMinP')?.value||'',maxPrice:$('shopMaxP')?.value||'',sort:$('shopSort')?.value||'featured',page:1,hasSearched:true});}
+function changeShopPage(delta){shopState.page=Math.max(1,Number(shopState.page||1)+Number(delta||0));renderShop(shopState);$('shopGrid')?.scrollIntoView({behavior:'smooth',block:'start'});}
+function resetShopFilters(){Object.assign(shopState,{type:'',company:'',karat:'',minWeight:'',maxWeight:'',minPrice:'',maxPrice:'',sort:'featured',page:1,hasSearched:false});renderShop(shopState);}
+function shopCard(p){const price=priceForProduct(p),compareOn=comparisons.includes(String(p.id)),stock=Number(p.stock??0);return `<article class="shopCard"><button class="imageBtn" onclick="openProductDetails('${escapeHtml(String(p.id))}')"><img loading="lazy" src="${escapeHtml(p.img||'assets/product-placeholder.svg')}" alt="${escapeHtml(p.name)}"></button><div class="shopCardBody"><div class="shopMetaTop"><span class="pill">${escapeHtml(p.company)}</span>${stock<=1?'<span class="status low">مخزون محدود</span>':''}</div><h3>${escapeHtml(p.name)}</h3><div class="shopFacts"><span>الوزن <b>${fmt(p.weight)} جم</b></span><span>العيار <b>${p.karat}</b></span><span>الكود <b>${escapeHtml(p.code||'—')}</b></span><span>السعر <b>${price?fmt(price)+' ج.م':'غير متاح'}</b></span></div><div class="shopBtns"><button class="btn primary" onclick="openPurchase('${escapeHtml(String(p.id))}')">شراء الآن</button><button class="btn light" onclick="reserveProduct('${escapeHtml(String(p.id))}')">حجز 24 ساعة</button><button class="btn light" onclick="openProductDetails('${escapeHtml(String(p.id))}')">التفاصيل</button><button class="btn light" onclick="addToCart('${escapeHtml(String(p.id))}')">🛒 سلة</button><button class="btn ${compareOn?'compareOn':''}" onclick="toggleCompare('${escapeHtml(String(p.id))}')">${compareOn?'✓ في المقارنة':'مقارنة'}</button><button class="btn whatsappBtn" onclick="askProductWhatsApp('${escapeHtml(String(p.id))}')">واتساب</button><button class="btn light" onclick="shareProduct('${escapeHtml(String(p.id))}')">مشاركة</button></div></div></article>`}
+
+/* ===== PRODUCT DETAILS ===== */
+function findProduct(id){return getShopInventory().find(p=>String(p.id)===String(id))}
+function openProductDetails(id){const p=findProduct(id);if(!p)return;const price=priceForProduct(p);$('productDetailTitle').textContent=p.name;$('productDetailBody').innerHTML=`<div class="detailHero"><div><img class="detailMainImg" src="${p.img||'assets/product-placeholder.svg'}" alt="${escapeHtml(p.name)}"></div><div><span class="pill">${escapeHtml(p.company)}</span><h2>${escapeHtml(p.name)}</h2><div class="detailGrid"><div>النوع<br><b>${escapeHtml(p.type)}</b></div><div>العيار<br><b>${p.karat}</b></div><div>الوزن<br><b>${fmt(p.weight)} جم</b></div><div>الكود<br><b>${escapeHtml(p.code||'—')}</b></div><div>السعر<br><b>${price?fmt(price)+' ج.م':'جاري التحديث'}</b></div><div>المخزون<br><b>${Number(p.stock??0)>0?fmt(p.stock):'اسأل الإدارة'}</b></div></div><div class="actions" style="margin-top:12px"><button class="btn primary" onclick="closeProductDetails();openPurchase('${escapeHtml(String(p.id))}')">شراء الآن</button><button class="btn whatsappBtn" onclick="askProductWhatsApp('${escapeHtml(String(p.id))}')">اسأل واتساب</button><button class="btn light" onclick="shareProduct('${escapeHtml(String(p.id))}')">مشاركة</button><button class="btn light" onclick="toggleCompare('${escapeHtml(String(p.id))}');closeProductDetails()">${comparisons.includes(String(p.id))?'إزالة من المقارنة':'أضف للمقارنة'}</button></div><div class="qrBox"><div id="qrCanvas"></div><div><b>QR القطعة</b><p class="small">يقود لصفحة التحقق.</p></div></div></div></div>`;$('productDetailModal').classList.add('open');setTimeout(()=>renderQR(`${location.origin}${location.pathname}#product=${encodeURIComponent(p.code||p.id)}`),20)}
+function closeProductDetails(){$('productDetailModal').classList.remove('open')}
+function renderQR(text){const box=$('qrCanvas');if(!box)return;box.innerHTML='';if(window.QRCode){new QRCode(box,{text,width:150,height:150,colorDark:'#21130b',colorLight:'#fffdf8',correctLevel:QRCode.CorrectLevel.M});}else{box.innerHTML=`<div class="qrFallback"><b>QR</b><br>${escapeHtml(text.slice(-18))}</div>`}}
+function askProductWhatsApp(id){const p=findProduct(id);if(!p)return;const num=(localStorage.getItem('bushra_whats')||'').replace(/\D/g,'');const text=encodeURIComponent(`استفسار عن المنتج ${p.code||p.id}\n${p.name}\nالشركة: ${p.company}\nالوزن: ${p.weight} جم\nالعيار: ${p.karat}`);if(num)window.open(`https://wa.me/${num}?text=${text}`,'_blank');else toast('أضف رقم واتساب الرسمي من الإدارة')}
+function shareProduct(id){const p=findProduct(id);if(!p)return;const url=`${location.origin}${location.pathname}#product=${encodeURIComponent(p.code||p.id)}`;if(navigator.share)navigator.share({title:p.name,text:`${p.name} — ${fmt(priceForProduct(p))} ج.م`,url}).catch(()=>{});else{navigator.clipboard?.writeText(url);toast('تم نسخ رابط المنتج')}}
+function shareSite(){const url=location.origin+location.pathname;if(navigator.share)navigator.share({title:'عبدالله بشرى — منصة الذهب',text:'منصة عبدالله بشرى للذهب والمجوهرات',url}).catch(()=>{});else{navigator.clipboard?.writeText(url);toast('تم نسخ رابط الموقع')}}
+
+/* ===== COMPARE ===== */
+function toggleCompare(id){id=String(id);if(comparisons.includes(id))comparisons=comparisons.filter(x=>x!==id);else{if(comparisons.length>=3)return toast('المقارنة تسمح حتى 3 منتجات');comparisons.push(id)}setJSON('bushra_compare_v14',comparisons);refreshCompareBar();renderShop(shopState);}
+function refreshCompareBar(){const box=$('compareBar');if(!box)return;const items=comparisons.map(findProduct).filter(Boolean);box.innerHTML=items.length?`<div><b>مقارنة المنتجات (${items.length}/3)</b><div class="compareMini">${items.map(p=>`<span>${escapeHtml(p.name)} <button onclick="toggleCompare('${p.id}')">✕</button></span>`).join('')}</div></div><button class="btn primary" onclick="openCompare()">قارن الآن</button>`:'';box.style.display=items.length?'flex':'none'}
+function openCompare(){const items=comparisons.map(findProduct).filter(Boolean);if(items.length<2)return toast('اختر منتجين على الأقل للمقارنة');$('compareBody').innerHTML=`<div class="compareTable"><table><thead><tr><th>البيان</th>${items.map(p=>`<th>${escapeHtml(p.name)}</th>`).join('')}</tr></thead><tbody><tr><td>الشركة</td>${items.map(p=>`<td>${escapeHtml(p.company)}</td>`).join('')}</tr><tr><td>النوع</td>${items.map(p=>`<td>${escapeHtml(p.type)}</td>`).join('')}</tr><tr><td>العيار</td>${items.map(p=>`<td>${p.karat}</td>`).join('')}</tr><tr><td>الوزن</td>${items.map(p=>`<td>${fmt(p.weight)} جم</td>`).join('')}</tr><tr><td>السعر</td>${items.map(p=>`<td>${fmt(priceForProduct(p))} ج.م</td>`).join('')}</tr><tr><td>المخزون</td>${items.map(p=>`<td>${fmt(p.stock??0)}</td>`).join('')}</tr></tbody></table></div>`;$('compareModal').classList.add('open')}
+function closeCompare(){$('compareModal').classList.remove('open')}
+
+/* ===== CART ===== */
+function addToCart(id){const p=findProduct(id);if(!p)return;const key=String(id),item=cart.find(x=>String(x.id)===key);if(item)item.qty+=1;else cart.push({id:key,qty:1,price:priceForProduct(p)});setJSON('bushra_cart_v14',cart);renderCart();refreshCartBadge();toast('تمت إضافة المنتج للسلة')}
+function removeCart(id){cart=cart.filter(x=>String(x.id)!==String(id));setJSON('bushra_cart_v14',cart);renderCart();refreshCartBadge()}
+function changeQty(id,d){const x=cart.find(i=>String(i.id)===String(id));if(!x)return;x.qty=Math.max(1,x.qty+d);setJSON('bushra_cart_v14',cart);renderCart();refreshCartBadge()}
+function clearCart(){cart=[];setJSON('bushra_cart_v14',cart);renderCart();refreshCartBadge()}
+function refreshCartBadge(){const n=cart.reduce((s,x)=>s+Number(x.qty||0),0);['cartBadge','menuCartBadge'].forEach(id=>{const el=$(id);if(el)el.textContent=n})}
+function renderCart(){const box=$('cartItems');if(!box)return;let total=0;box.innerHTML=cart.map(i=>{const p=findProduct(i.id);if(!p)return '';const line=priceForProduct(p)*i.qty;total+=line;return `<div class="cartRow"><img src="${p.img||'assets/product-placeholder.svg'}"><div><b>${escapeHtml(p.name)}</b><div class="small">${p.weight} جم • عيار ${p.karat} • ${p.code||''}</div></div><div class="cartQty"><button class="btn light" onclick="changeQty('${i.id}',-1)">−</button><b>${i.qty}</b><button class="btn light" onclick="changeQty('${i.id}',1)">+</button></div><div class="cartPrice"><b>${fmt(line)} ج.م</b><button class="btn light danger" onclick="removeCart('${i.id}')">حذف</button></div></div>`}).join('')||'<div class="empty">السلة فارغة.</div>';if($('cartTotal'))$('cartTotal').textContent=fmt(total)+' ج.م';refreshCartBadge()}
+
+/* ===== PURCHASE / PRICE LOCK ===== */
+function startPriceLock(total,kind,data){clearInterval(priceLock.timer);priceLock={kind,items:data,total,expiresAt:Date.now()+60000,timer:null};priceLock.timer=setInterval(()=>{const rem=Math.max(0,priceLock.expiresAt-Date.now());const sec=Math.ceil(rem/1000);const el=$('priceLock');if(el)el.textContent=sec?`🔒 السعر مثبت لمدة ${sec} ثانية`:'⏱ انتهى تثبيت السعر';if(!sec)clearInterval(priceLock.timer)},250);}
+function lockPriceForProducts(items){const total=items.reduce((sum,i)=>sum+priceForProduct(i.p)*i.qty,0);startPriceLock(total,'cart',items);return total}
+function openPurchase(id){if(!requireCustomer('للشراء لازم تنشئ حسابًا.'))return;const p=findProduct(id);if(!p)return;const total=priceForProduct(p);startPriceLock(total,'single',{p:String(p.id),qty:1});$('purchaseSummary').innerHTML=`<div class="orderStat"><small>المنتج</small><b>${escapeHtml(p.name)}</b></div><div class="orderStat"><small>الشركة</small><b>${escapeHtml(p.company)}</b></div><div class="orderStat"><small>الوزن / العيار</small><b>${fmt(p.weight)} جم / ${p.karat}</b></div><div class="orderStat"><small>السعر المثبت</small><b>${fmt(total)} ج.م</b></div>`;$('purchaseAccountBox').innerHTML=`👤 ${escapeHtml(getCustomer().name)} • ${escapeHtml(getCustomer().email)} • الطلب مرتبط بحسابك`;$('purchaseProductId').value=String(p.id);$('purchaseModal').classList.add('open');$('purchaseMode').value='single'}
+function openBullionPurchase(id,name,company,weight,price){if(!requireCustomer('لشراء السبيكة لازم يكون عندك حساب.'))return;const p={id,name,company,weight,karat:24,code:id,price};startPriceLock(price,'bullion',p);$('purchaseSummary').innerHTML=`<div class="orderStat"><small>المنتج</small><b>${escapeHtml(name)}</b></div><div class="orderStat"><small>الشركة</small><b>${escapeHtml(company)}</b></div><div class="orderStat"><small>الوزن / العيار</small><b>${fmt(weight)} جم / 24</b></div><div class="orderStat"><small>السعر المثبت</small><b>${price?fmt(price)+' ج.م':'سيحدد عند المراجعة'}</b></div>`;$('purchaseAccountBox').innerHTML=`👤 ${escapeHtml(getCustomer().name)} • ${escapeHtml(getCustomer().email)} • الطلب مرتبط بحسابك`;$('purchaseProductId').value='';$('purchaseMode').value='bullion';$('purchaseModal').dataset.bullion=JSON.stringify(p);$('purchaseModal').classList.add('open')}
+function closePurchase(){clearInterval(priceLock.timer);$('purchaseModal').classList.remove('open')}
+function checkoutCart(){if(!cart.length)return toast('السلة فارغة');if(!requireCustomer('لإرسال السلة لازم تسجل حسابًا.'))return;const items=cart.map(i=>({i,p:findProduct(i.id)})).filter(x=>x.p);const total=lockPriceForProducts(items);$('purchaseSummary').innerHTML=`<div class="orderStat"><small>عدد المنتجات</small><b>${items.length}</b></div><div class="orderStat"><small>إجمالي السلة</small><b>${fmt(total)} ج.م</b></div><div class="orderStat"><small>حالة السعر</small><b>مثبت 60 ثانية</b></div>`;$('purchaseAccountBox').innerHTML=`👤 ${escapeHtml(getCustomer().name)} • ${escapeHtml(getCustomer().email)} • سيتم ربط كل العناصر بحسابك`;$('purchaseProductId').value='';$('purchaseMode').value='cart';$('purchaseModal').dataset.cart=JSON.stringify(items.map(x=>({id:x.p.id,qty:x.i.qty})));$('purchaseModal').classList.add('open')}
+
+on('purchaseForm','submit',async e=>{
+ e.preventDefault();
+ if(Date.now()>priceLock.expiresAt)return toast('انتهى تثبيت السعر. أغلق النافذة وابدأ العملية بسعر جديد.');
+ const u=getCustomer();if(!u)return requireCustomer();
+ let order={id:'ORD-'+Date.now().toString().slice(-8),type:'شراء',status:'pending_review',createdAt:new Date().toISOString(),customerRef:u.id,customerEmail:u.email,customerName:u.name,phone:u.phone,delivery:e.target.elements.delivery.value,notes:e.target.elements.notes.value,priceLocked:true,priceLockedUntil:new Date(priceLock.expiresAt).toISOString()};
+ if(priceLock.kind==='single'){
+  const p=findProduct(priceLock.items.p);if(!p)return;
+  order={...order,productId:p.id,productCode:p.code,productName:p.name,company:p.company,productType:p.type,style:p.style,karat:p.karat,weight:p.weight,pricePerGram:prices[p.karat]||0,total:priceLock.total,items:[{id:p.id,qty:1,total:priceLock.total}]};
+ }else if(priceLock.kind==='bullion'){
+  const p=priceLock.items;
+  order={...order,type:'شراء سبيكة',productId:0,productCode:p.code,productName:p.name,company:p.company,productType:'سبائك',style:'ذهب استثماري',karat:24,weight:p.weight,pricePerGram:prices[24]||0,total:priceLock.total};
+ }else{
+  const arr=JSON.parse($('purchaseModal').dataset.cart||'[]');
+  order={...order,type:'شراء سلة',productId:0,productCode:'CART-'+Date.now(),productName:'سلة مشتريات',productType:'متعدد',karat:0,weight:arr.reduce((s,x)=>s+(findProduct(x.id)?.weight||0)*x.qty,0),pricePerGram:0,total:priceLock.total,items:arr.map(x=>({id:x.id,qty:x.qty,price:priceForProduct(findProduct(x.id)||{})}))};
+ }
+ orders.unshift(order);
+ notifications.unshift({id:'N-'+Date.now(),type:'order',title:'طلب جديد',body:`طلب ${order.id} من ${u.name}`,createdAt:new Date().toISOString(),read:false});
+ saveCore();renderMyOrders();renderAdminOrders();
+ try{await fetch('/api/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(order)})}catch(_){}
+ closePurchase();e.target.reset();delete $('purchaseModal').dataset.bullion;delete $('purchaseModal').dataset.cart;
+ toast('تم استلام الطلب — رقم '+order.id+' والحالة: بانتظار المراجعة');
+});
+
+function reserveProduct(id){if(!requireCustomer('للحجز 24 ساعة لازم يكون عندك حساب.'))return;const p=findProduct(id);if(!p)return;const order={id:'RES-'+Date.now().toString().slice(-8),type:'حجز',status:'pending_review',createdAt:new Date().toISOString(),customerRef:getCustomer().id,customerEmail:getCustomer().email,customerName:getCustomer().name,phone:getCustomer().phone,delivery:'حجز 24 ساعة',notes:'حجز 24 ساعة',productId:p.id,productCode:p.code,productName:p.name,company:p.company,productType:p.type,style:p.style,karat:p.karat,weight:p.weight,pricePerGram:prices[p.karat]||0,total:priceForProduct(p)};orders.unshift(order);saveCore();renderMyOrders();try{fetch('/api/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(order)})}catch(_){}const wa=(localStorage.getItem('bushra_whats')||'').replace(/\D/g,'');const msg=encodeURIComponent(`حجز 24 ساعة\n${p.name}\nالكود: ${p.code}\nالوزن: ${p.weight} جم\nرقم الحجز: ${order.id}`);if(wa)window.open(`https://wa.me/${wa}?text=${msg}`,'_blank');toast('تم إرسال الحجز للمراجعة لمدة 24 ساعة')}
+
+/* ===== ACCOUNT ===== */
+function openAccount(){const u=getCustomer();$('accountModal').classList.add('open');$('accountForm').style.display=u?'none':'block';$('accountLogged').classList.toggle('hidden',!u);$('accountTitle').textContent=u?'👤 حسابي':'👤 إنشاء حساب';if(u){$('accountNameView').textContent=u.name;$('accountEmailView').textContent=u.email;$('accountPhoneView').textContent=u.phone;renderMyOrders();renderHistory();}}
+function closeAccount(){$('accountModal').classList.remove('open')}
+function demoLogin(){const u={id:'DEMO-'+Date.now().toString(36).toUpperCase(),name:'عميل تجريبي',phone:'01000000000',email:'demo@bushra.local',createdAt:new Date().toISOString()};setJSON('bushra_customer',u);refreshAccountButton();renderVault();toast('تم الدخول بحساب تجريبي للمعاينة');openAccount()}
+on('accountForm','submit',async e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.target).entries());const u={id:'CUS-'+Date.now().toString(36).toUpperCase(),name:fd.name.trim(),phone:fd.phone.trim(),email:fd.email.trim().toLowerCase(),createdAt:new Date().toISOString(),status:'pending_verification'};setJSON('bushra_customer',u);setJSON(`bushra_vault_${u.id}`,{weight:0,cost:0});refreshAccountButton();renderVault();notifications.unshift({id:'N-'+Date.now(),type:'account',title:'حساب جديد',body:`تم إنشاء حساب ${u.name}`,createdAt:new Date().toISOString(),read:false});saveCore();try{await fetch('/api/customers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(u)})}catch(_){}toast('تم إنشاء الحساب. تأكيد البريد يتم عند تشغيل خدمات البريد.');e.target.reset();openAccount()});
+function logoutCustomer(){localStorage.removeItem('bushra_customer');refreshAccountButton();renderVault();closeAccount();toast('تم تسجيل الخروج')}
+function renderMyOrders(){const u=getCustomer(),el=$('myOrders');if(!u||!el)return;const mine=orders.filter(o=>o.customerRef===u.id);el.innerHTML='<h3>طلباتي</h3>'+((mine.map(o=>`<div class="row"><span><b>${escapeHtml(o.id)}</b><br><small>${escapeHtml(o.type||'طلب')} • ${escapeHtml(o.productName||'')}</small></span><span class="status">${escapeHtml(orderStatusLabel(o.status))}</span></div>`).join(''))||'<div class="empty">لا توجد طلبات حتى الآن.</div>')}
+function orderStatusLabel(s){return ({pending_review:'بانتظار المراجعة',new:'جديد',approved:'تمت الموافقة',rejected:'مرفوض',completed:'تمت المعالجة'})[s]||s||'جديد'}
+
+/* ===== VAULT ===== */
+function renderVault(){const u=getCustomer(),locked=!u;$('vaultLocked').style.display=locked?'block':'none';$('vaultIntro').textContent=locked?'المحفظة مرتبطة بالحساب، ولا يوجد رصيد قبل تسجيل الدخول وامتلاك ذهب محفوظ.':'محفظتك مرتبطة بحسابك؛ الرصيد لا يزيد إلا بعملية معتمدة.';const v=u?safeJSON(`bushra_vault_${u.id}`,{weight:0,cost:0}):{weight:0,cost:0};$('vaultWeight').textContent=fmt(v.weight)+' جم';$('vaultCost').textContent=fmt(v.cost)+' ج.م';$('vaultValue').textContent=fmt(Number(v.weight)*(prices.buy24||0))+' ج.م';$('vaultPL').textContent=fmt(Number(v.weight)*(prices.buy24||0)-Number(v.cost||0))+' ج.م'}
+function sellFromVault(){if(!requireCustomer('بيع الذهب من المحفظة متاح لصاحب الحساب.'))return;const u=getCustomer(),v=safeJSON(`bushra_vault_${u.id}`,{weight:0,cost:0}),w=Number(prompt('كم جرام تريد بيعها؟','1')||0);if(!w||w<=0||w>v.weight)return toast('الكمية غير صالحة أو أكبر من رصيدك');const order={id:'SELLV-'+Date.now().toString().slice(-8),type:'بيع من المحفظة',status:'pending_review',createdAt:new Date().toISOString(),customerRef:u.id,customerEmail:u.email,customerName:u.name,phone:u.phone,weight:w,karat:24,pricePerGram:prices.buy24||0,total:w*(prices.buy24||0)};orders.unshift(order);saveCore();renderMyOrders();toast('تم إرسال طلب بيع رصيدك للمراجعة')}
+function openVaultPurchase(){if(!requireCustomer('لشراء الذهب يلزم تسجيل الدخول أولًا.'))return;showSection('bullionCatalog');toast('اختَر الشركة والوزن ثم ابدأ شراء الذهب.')}
+function requestVaultDelivery(){if(!requireCustomer('لازم تسجل الدخول أولًا لطلب الاستلام.'))return;toast('تم فتح طلب الاستلام لحسابك — المراجعة من الإدارة.')}
+
+/* ===== PRICE HISTORY & ALERTS ===== */
+function renderHistory(){const el=$('priceHistoryList');if(!el)return;el.innerHTML=priceHistory.slice(-20).reverse().map(x=>`<div class="row"><span>${new Date(x.at).toLocaleString('ar-EG')}</span><span>21: <b>${fmt(x.sell21)}</b> / شراء: <b>${fmt(x.buy21)}</b></span></div>`).join('')||'<div class="empty">سيظهر سجل الأسعار بعد أول تحديث.</div>'}
+function recordPriceHistory(){if(!prices[21])return;const last=priceHistory[priceHistory.length-1];if(last&&Math.abs(Number(last.sell21)-Number(prices[21]))<0.01&&Date.now()-new Date(last.at).getTime()<120000)return;priceHistory.push({at:new Date().toISOString(),sell21:prices[21],buy21:prices.buy21,sell24:prices[24],buy24:prices.buy24,sell18:prices[18],buy18:prices.buy18});priceHistory=priceHistory.slice(-200);setJSON('bushra_price_history_v14',priceHistory);renderHistory()}
+function maybeNotify(title,body){notifications.unshift({id:'N-'+Date.now(),type:'alert',title,body,createdAt:new Date().toISOString(),read:false});saveCore();try{if('Notification' in window&&Notification.permission==='granted')new Notification(title,{body})}catch(_){}toast(title+' — '+body)}
+function checkPriceAlerts(){const triggered=[];priceAlerts.forEach(a=>{const current=a.karat==='21'?prices[21]:a.karat==='24'?prices[24]:prices[18];const ok=a.direction==='above'?current>=a.target:current<=a.target;if(ok&&!a.triggered){a.triggered=true;triggered.push(a)}});if(triggered.length)triggered.forEach(a=>maybeNotify('🔔 تنبيه سعر الذهب',`عيار ${a.karat} وصل إلى ${fmt(a.target)} ج.م`));setJSON('bushra_price_alerts_v14',priceAlerts);renderAlerts()}
+function renderAlerts(){const el=$('priceAlertsList');if(!el)return;el.innerHTML=priceAlerts.map((a,i)=>`<div class="row"><span>عيار ${a.karat} • ${a.direction==='above'?'فوق':'تحت'} ${fmt(a.target)} ج.م</span><button class="btn light danger" onclick="deletePriceAlert(${i})">حذف</button></div>`).join('')||'<div class="empty">لا توجد تنبيهات أسعار.</div>'}
+function setPriceAlert(){if(!requireCustomer('تنبيهات الأسعار
